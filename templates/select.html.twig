@@ -1,0 +1,18 @@
+{% extends 'base.html.twig' %}
+
+{% block body %}
+    {{ form_start(form) }}
+    <button type="submit">Submit</button>
+
+
+    {% do form.color.setRendered %}
+
+    <proponent-select name="form[color]" value="3"></proponent-select>
+
+    {{ form_end(form) }}
+{% endblock %}
+
+{% block dumper %}
+    {{ dump(form) }}
+    {{ dump(data) }}
+{% endblock %}

@@ -1,0 +1,9 @@
+{% block vue_color_picker_widget %}
+    <color-picker id="{{ id }}" name="{{ full_name }}"
+            {%- if value is not empty %} value="{{ value }}"{% endif -%}
+            {%- if required %} required="true"{% endif -%}></color-picker>
+{% endblock %}
+
+{% block vue_proponent_choice_widget %}
+    <select></select>
+{% endblock %}

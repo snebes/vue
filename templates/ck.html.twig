@@ -1,7 +1,13 @@
 {% extends 'base.html.twig' %}
 
 {% block body %}
-    <textarea name="editor1" id="editor1" rows="10" cols="80">This is my textarea to be replaced with CKEditor.</textarea>
+    <textarea name="editor1" id="editor1" rows="10" cols="80">
+        <ol>
+            <li>
+                <div class="label">test</div><div class="list-item">test</div>
+            </li>
+        </ol>
+    </textarea>
     <textarea name="editor2" id="editor2" rows="10" cols="80">
         <ol class="cdp-numbered-list">
             <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
@@ -19,6 +25,21 @@
     </textarea>
 
 
+    <div class="mt-5 border-top pt-5">
+
+        <dl class="cdp-numbered-list">
+            <dt>#.</dt>
+            <dd>Enter text...</dd>
+            <dt>#.</dt>
+            <dd>Enter text...</dd>
+            <dt>#.</dt>
+            <dd>Enter text...</dd>
+            <dt>#.</dt>
+            <dd>Enter text...</dd>
+        </dl>
+
+    </div>
+
 
     <script src="/ckeditor/ckeditor.js"></script>
     <script>
@@ -26,10 +47,20 @@
             let config = {
                 contentsCss: "/ck.css",
                 extraPlugins: "cdpNumberedList",
-                removePlugins: 'list'
+                // removePlugins: 'list'
             };
             CKEDITOR.plugins.addExternal("cdpNumberedList", "/plugins/cdp_list/", "plugin.js");
-            CKEDITOR.plugins.addExternal("descriptionlist", "/plugins/dl/", "plugin.js");
+
+            CKEDITOR.on('instanceReady', function(e) {
+                var editor = e.editor;
+                editor.dataProcessor.htmlFilter.addRules({
+                    elements: {
+                        li: function(e) {
+                            console.log(e);
+                        }
+                    }
+                });
+            });
 
             CKEDITOR.replace("editor1", config);
             CKEDITOR.replace("editor2", config);

@@ -1,857 +1,485 @@
+'use strict';
+
 (function () {
-    var listNodeNames = {ol: 1},
-        whitespaces = CKEDITOR.dom.walker.whitespaces(),
-        bookmarks = CKEDITOR.dom.walker.bookmark(),
-        nonEmpty = function (node) {
-            return !(whitespaces(node) || bookmarks(node));
-        },
-        blockBogus = CKEDITOR.dom.walker.bogus();
 
-    /**
-     * @param editor
-     * @param groupObj
-     * @param listsCreated
-     */
-    function createList(editor, groupObj, listsCreated) {
-        var contents = groupObj.contents,
-            doc = groupObj.root.getDocument(),
-            listContents = [];
-
-        // It is possible to have the contents returned by DomRangeIterator to be the same as the root.
-        // e.g. when we're running into table cells.
-        // In such a case, enclose the childNodes of contents[0] into a <div>.
-        if (contents.length == 1 && contents[0].equals(groupObj.root)) {
-            var divBlock = doc.createElement('div');
-            contents[0].moveChildren && contents[0].moveChildren(divBlock);
-            contents[0].append(divBlock);
-            contents[0] = divBlock;
-        }
-
-        // Calculate the common parent node of all content blocks.
-        var commonParent = groupObj.contents[0].getParent();
-
-        for (var i = 0; i < contents.length; i++) {
-            commonParent = commonParent.getCommonAncestor(contents[i].getParent());
-        }
-
-        var useComputedState = editor.config.useComputedState,
-            listDir, explicitDirection;
-
-        useComputedState = useComputedState === undefined || useComputedState;
-
-        // We want to insert things that are in the same tree level only, so calculate the contents again
-        // by expanding the selected blocks to the same tree level.
-        for (i = 0; i < contents.length; i++) {
-            var contentNode = contents[i],
-                parentNode;
-
-            while ((parentNode = contentNode.getParent())) {
-                if (parentNode.equals(commonParent)) {
-                    listContents.push(contentNode);
-
-                    // Determine the lists's direction.
-                    if (!explicitDirection && contentNode.getDirection())
-                        explicitDirection = 1;
-
-                    var itemDir = contentNode.getDirection(useComputedState);
-
-                    if (listDir !== null) {
-                        // If at least one LI have a different direction than current listDir, we can't have listDir.
-                        if (listDir && listDir != itemDir) {
-                            listDir = null;
-                        } else {
-                            listDir = itemDir;
-                        }
-                    }
-
-                    break;
-                }
-
-                contentNode = parentNode;
-            }
-        }
-
-        if (listContents.length < 1) {
-            return;
-        }
-
-        // Insert the list to the DOM tree.
-        var insertAnchor = listContents[listContents.length - 1].getNext(),
-            listNode = doc.createElement(this.type);
-
-        listNode.setAttribute('class', 'cdp-numbered-list');
-        listsCreated.push(listNode);
-
-        var contentBlock, listItem, listLabel, listContent;
-
-        while (listContents.length) {
-            contentBlock = listContents.shift();
-            listItem = doc.createElement('li');
-            listLabel = doc.createElement('div');
-            listContent = doc.createElement('div');
-
-            listLabel.setText('#.');
-            listLabel.setAttribute('class', 'label');
-            listLabel.appendTo(listItem);
-            listContent.setAttribute('class', 'list-item');
-            listContent.appendTo(listItem);
-
-            // If current block should be preserved, append it to list item instead of
-            // transforming it to <li> element.
-            if (shouldPreserveBlock(contentBlock)) {
-                contentBlock.appendTo(listContent);
-            } else {
-                contentBlock.copyAttributes(listContent);
-
-                // Remove direction attribute after it was merged into list root.
-                if (listDir && contentBlock.getDirection()) {
-                    listItem.removeStyle('direction');
-                    listItem.removeAttribute('dir');
-                }
-
-                contentBlock.moveChildren(listContent);
-                contentBlock.remove();
-            }
-
-            listItem.appendTo(listNode);
-        }
-
-        // Apply list root dir only if it has been explicitly declared.
-        if (listDir && explicitDirection) {
-            listNode.setAttribute('dir', listDir);
-        }
-
-        if (insertAnchor) {
-            listNode.insertBefore(insertAnchor);
-        } else {
-            listNode.appendTo(commonParent);
-        }
-    }
-
-    /**
-     * @param editor
-     * @param groupObj
-     * @param database
-     */
-    function removeList(editor, groupObj, database) {
-        // This is very much like the change list type operation.
-        // Except that we're changing the selected items' indent to -1 in the list array.
-        var listArray = CKEDITOR.plugins.list.listToArray(groupObj.root, database),
-            selectedListItems = [];
-
-        for (var i = 0; i < groupObj.contents.length; i++) {
-            var itemNode = groupObj.contents[i];
-            itemNode = itemNode.getAscendant('li', true);
-            if (!itemNode || itemNode.getCustomData('list_item_processed'))
-                continue;
-            selectedListItems.push(itemNode);
-            CKEDITOR.dom.element.setMarker(database, itemNode, 'list_item_processed', true);
-        }
-
-        var lastListIndex = null;
-        for (i = 0; i < selectedListItems.length; i++) {
-            var listIndex = selectedListItems[i].getCustomData('listarray_index');
-            listArray[listIndex].indent = -1;
-            lastListIndex = listIndex;
-        }
-
-        // After cutting parts of the list out with indent=-1, we still have to maintain the array list
-        // model's nextItem.indent <= currentItem.indent + 1 invariant. Otherwise the array model of the
-        // list cannot be converted back to a real DOM list.
-        for (i = lastListIndex + 1; i < listArray.length; i++) {
-            if (listArray[i].indent > listArray[i - 1].indent + 1) {
-                var indentOffset = listArray[i - 1].indent + 1 - listArray[i].indent;
-                var oldIndent = listArray[i].indent;
-                while (listArray[i] && listArray[i].indent >= oldIndent) {
-                    listArray[i].indent += indentOffset;
-                    i++;
-                }
-                i--;
-            }
-        }
-
-        var newList = CKEDITOR.plugins.list.arrayToList(listArray, database, null, editor.config.enterMode, groupObj.root.getAttribute('dir'));
-
-        // Compensate <br> before/after the list node if the surrounds are non-blocks.(https://dev.ckeditor.com/ticket/3836)
-        var docFragment = newList.listNode,
-            boundaryNode, siblingNode;
-
-        function compensateBrs(isStart) {
-            if (
-                (boundaryNode = docFragment[isStart ? 'getFirst' : 'getLast']()) &&
-                !(boundaryNode.is && boundaryNode.isBlockBoundary()) &&
-                (siblingNode = groupObj.root[isStart ? 'getPrevious' : 'getNext'](CKEDITOR.dom.walker.invisible(true))) &&
-                !(siblingNode.is && siblingNode.isBlockBoundary({br: 1}))
-            ) {
-                editor.document.createElement('br')[isStart ? 'insertBefore' : 'insertAfter'](boundaryNode);
-            }
-        }
-
-        compensateBrs(true);
-        compensateBrs();
-
-        docFragment.replace(groupObj.root);
-
-        editor.fire('contentDomInvalidated');
-    }
-
-    var headerTagRegex = /^h[1-6]$/;
-
-    function shouldPreserveBlock(block) {
-        return (
-            block.is('pre') ||
-            headerTagRegex.test(block.getName()) ||
-            block.getAttribute('contenteditable') == 'false'
-        );
-    }
-
-    function CdpListCommand() {
-        this.name = 'cdpnumberedlist';
-        this.type = 'ol';
-        this.context = 'ol';
-        this.allowedContent = 'ol li';
-        this.requiredContent = 'ol';
-    }
-
-    var elementType = CKEDITOR.dom.walker.nodeType(CKEDITOR.NODE_ELEMENT);
-
-    /**
-     * Merge child nodes with direction preserved.
-     *
-     * @param from
-     * @param into
-     * @param refNode
-     * @param forward
-     */
-    function mergeChildren(from, into, refNode, forward) {
-        var child, itemDir;
-
-        while ((child = from[forward ? 'getLast' : 'getFirst'](elementType))) {
-            if ((itemDir = child.getDirection(1)) !== into.getDirection(1)) {
-                child.setAttribute('dir', itemDir);
-            }
-
-            child.remove();
-
-            refNode ? child[forward ? 'insertBefore' : 'insertAfter'](refNode) : into.append(child, forward);
-            refNode = child;
-        }
-    }
-
-    CdpListCommand.prototype = {
-        exec: function (editor) {
-            // Run state check first of all.
-            this.refresh(editor, editor.elementPath());
-
-            var config = editor.config,
-                selection = editor.getSelection(),
-                ranges = selection && selection.getRanges();
-
-            // Midas lists rule #1 says we can create a list even in an empty document.
-            // But DOM iterator wouldn't run if the document is really empty.
-            // So create a paragraph if the document is empty and we're going to create a list.
-            if (this.state == CKEDITOR.TRISTATE_OFF) {
-                var editable = editor.editable();
-
-                if (!editable.getFirst(nonEmpty)) {
-                    config.enterMode == CKEDITOR.ENTER_BR ? editable.appendBogus() : ranges[0].fixBlock(1, config.enterMode == CKEDITOR.ENTER_P ? 'p' : 'div');
-                    selection.selectRanges(ranges);
-                }
-                // Maybe a single range there enclosing the whole list, turn on the list state manually
-                else {
-                    var range = ranges.length == 1 && ranges[0],
-                        enclosedNode = range && range.getEnclosedNode();
-
-                    if (enclosedNode && enclosedNode.is && this.type == enclosedNode.getName()) {
-                        this.setState(CKEDITOR.TRISTATE_ON);
-                    }
-                }
-            }
-
-            var bookmarks = selection.createBookmarks(true);
-
-            // Group the blocks up because there are many cases where multiple lists have to be created, or multiple
-            // lists have to be cancelled.
-            var listGroups = [],
-                database = {},
-                rangeIterator = ranges.createIterator(),
-                index = 0;
-
-            while ((range = rangeIterator.getNextRange()) && ++index) {
-                var boundaryNodes = range.getBoundaryNodes(),
-                    startNode = boundaryNodes.startNode,
-                    endNode = boundaryNodes.endNode;
-
-                if (startNode.type == CKEDITOR.NODE_ELEMENT && startNode.getName() == 'td') {
-                    range.setStartAt(boundaryNodes.startNode, CKEDITOR.POSITION_AFTER_START);
-                }
-
-                if (endNode.type == CKEDITOR.NODE_ELEMENT && endNode.getName() == 'td') {
-                    range.setEndAt(boundaryNodes.endNode, CKEDITOR.POSITION_BEFORE_END);
-                }
-
-                var iterator = range.createIterator(),
-                    block;
-
-                iterator.forceBrBreak = (this.state == CKEDITOR.TRISTATE_OFF);
-
-                while ((block = iterator.getNextParagraph())) {
-                    // Avoid duplicate blocks get processed across ranges.
-                    // Avoid processing comments, we don't want to touch it.
-                    if (block.getCustomData('list_block') || hasCommentsChildOnly(block)) {
-                        continue;
-                    } else {
-                        CKEDITOR.dom.element.setMarker(database, block, 'list_block', 1);
-                    }
-
-                    var path = editor.elementPath(block),
-                        pathElements = path.elements,
-                        pathElementsCount = pathElements.length,
-                        processedFlag = 0,
-                        blockLimit = path.blockLimit,
-                        element;
-
-                    // First, try to group by a list ancestor.
-                    for (var i = pathElementsCount - 1; i >= 0 && (element = pathElements[i]); i--) {
-                        // Don't leak outside block limit
-                        if (listNodeNames[element.getName()] && blockLimit.contains(element)) {
-                            // If we've encountered a list inside a block limit
-                            // The last group object of the block limit element should
-                            // no longer be valid. Since paragraphs after the list
-                            // should belong to a different group of paragraphs before
-                            // the list.
-                            blockLimit.removeCustomData('list_group_object_' + index);
-
-                            var groupObj = element.getCustomData('list_group_object');
-
-                            if (groupObj) {
-                                groupObj.contents.push(block);
-                            } else {
-                                groupObj = {root: element, contents: [block]};
-                                listGroups.push(groupObj);
-                                CKEDITOR.dom.element.setMarker(database, element, 'list_group_object', groupObj);
-                            }
-
-                            processedFlag = 1;
-                            break;
-                        }
-                    }
-
-                    if (processedFlag) {
-                        continue;
-                    }
-
-                    var root = blockLimit;
-
-                    if (root.getCustomData('list_group_object_' + index)) {
-                        root.getCustomData('list_group_object_' + index).contents.push(block);
-                    } else {
-                        groupObj = {root: root, contents: [block]};
-                        CKEDITOR.dom.element.setMarker(database, root, 'list_group_object_' + index, groupObj);
-                        listGroups.push(groupObj);
-                    }
-                }
-            }
-
-            // Now we have two kinds of list groups, groups rooted at a list, and groups rooted at a block limit element.
-            // We either have to build lists or remove lists, for removing a list does not makes sense when we are looking
-            // at the group that's not rooted at lists. So we have three cases to handle.
-            var listsCreated = [];
-
-            while (listGroups.length > 0) {
-                groupObj = listGroups.shift();
-
-                if (this.state == CKEDITOR.TRISTATE_OFF) {
-                    if (isEmptyList(groupObj)) {
-                        continue;
-                        // } else if (listNodeNames[groupObj.root.getName()]) {
-                        //     changeListType.call(this, editor, groupObj, database, listsCreated);
-                    } else {
-                        createList.call(this, editor, groupObj, listsCreated);
-                    }
-                } else if (this.state == CKEDITOR.TRISTATE_ON && listNodeNames[groupObj.root.getName()] && !isEmptyList(groupObj)) {
-                    removeList.call(this, editor, groupObj, database);
-                }
-            }
-
-            // For all new lists created, merge into adjacent, same type lists.
-            for (i = 0; i < listsCreated.length; i++) {
-                mergeListSiblings(listsCreated[i]);
-            }
-
-            // Clean up, restore selection and update toolbar button states.
-            CKEDITOR.dom.element.clearAllMarkers(database);
-            selection.selectBookmarks(bookmarks);
-            editor.focus();
-
-            function isEmptyList(groupObj) {
-                // If list is without any li item, then ignore such element from transformation, because it throws errors in console (#2411, #2438).
-                return listNodeNames[groupObj.root.getName()] && !getChildCount(groupObj.root, [CKEDITOR.NODE_COMMENT]);
-            }
-
-            function getChildCount(element, excludeTypes) {
-                return CKEDITOR.tools.array.filter(element.getChildren().toArray(), function (node) {
-                    return CKEDITOR.tools.array.indexOf(excludeTypes, node.type) === -1;
-                }).length;
-            }
-
-            function hasCommentsChildOnly(element) {
-                var ret = true;
-
-                if (element.getChildCount() === 0) {
-                    return false;
-                }
-
-                element.forEach(function (node) {
-                    if (node.type !== CKEDITOR.NODE_COMMENT) {
-                        ret = false;
-                        return false;
-                    }
-                }, null, true);
-
-                return ret;
-            }
-        },
-
-        refresh: function (editor, path) {
-            var list = path.contains(listNodeNames, 1),
-                limit = path.blockLimit || path.root;
-
-            if (list && limit.contains(list)) {
-                this.setState(list.is(this.type) ? CKEDITOR.TRISTATE_ON : CKEDITOR.TRISTATE_OFF);
-            } else {
-                this.setState(CKEDITOR.TRISTATE_OFF);
-            }
-        }
-    };
-
-    /**
-     * Merge list adjacent, of same type lists.
-     *
-     * @param listNode
-     */
-    function mergeListSiblings(listNode) {
-        function mergeSibling(rtl) {
-            var sibling = listNode[rtl ? 'getPrevious' : 'getNext'](nonEmpty);
-
-            if (sibling && sibling.type == CKEDITOR.NODE_ELEMENT && sibling.is(listNode.getName())) {
-                mergeChildren(listNode, sibling, null, !rtl);
-
-                listNode.remove();
-                listNode = sibling;
-            }
-        }
-
-        mergeSibling();
-        mergeSibling(1);
-    }
-
-    /**
-     * Check if node is block element that recieves text.
-     *
-     * @param node
-     * @return {Boolean}
-     */
-    function isTextBlock(node) {
-        return node.type == CKEDITOR.NODE_ELEMENT && (node.getName() in CKEDITOR.dtd.$block || node.getName() in CKEDITOR.dtd.$listItem) && CKEDITOR.dtd[node.getName()]['#'];
-    }
-
-    /**
-     * Join visually two block lines.
-     *
-     * @param editor
-     * @param cursor
-     * @param nextCursor
-     */
-    function joinNextLineToCursor(editor, cursor, nextCursor) {
-        editor.fire('saveSnapshot');
-
-        // Merge with previous block's content.
-        nextCursor.enlarge(CKEDITOR.ENLARGE_LIST_ITEM_CONTENTS);
-        var frag = nextCursor.extractContents();
-
-        cursor.trim(false, true);
-        var bm = cursor.createBookmark();
-
-        // Kill original bogus;
-        var currentPath = new CKEDITOR.dom.elementPath(cursor.startContainer),
-            pathBlock = currentPath.block,
-            currentBlock = currentPath.lastElement.getAscendant('li', 1) || pathBlock,
-            nextPath = new CKEDITOR.dom.elementPath(nextCursor.startContainer),
-            nextLi = nextPath.contains(CKEDITOR.dtd.$listItem),
-            nextList = nextPath.contains(CKEDITOR.dtd.$list),
-            last;
-
-        // Remove bogus node the current block/pseudo block.
-        if (pathBlock) {
-            var bogus = pathBlock.getBogus();
-            bogus && bogus.remove();
-        } else if (nextList) {
-            last = nextList.getPrevious(nonEmpty);
-            if (last && blockBogus(last))
-                last.remove();
-        }
-
-        // Kill the tail br in extracted.
-        last = frag.getLast();
-        if (last && last.type == CKEDITOR.NODE_ELEMENT && last.is('br'))
-            last.remove();
-
-        // Insert fragment at the range position.
-        var nextNode = cursor.startContainer.getChild(cursor.startOffset);
-        if (nextNode)
-            frag.insertBefore(nextNode);
-        else
-            cursor.startContainer.append(frag);
-
-        // Move the sub list nested in the next list item.
-        if (nextLi) {
-            var sublist = getSubList(nextLi);
-            if (sublist) {
-                // If next line is in the sub list of the current list item.
-                if (currentBlock.contains(nextLi)) {
-                    mergeChildren(sublist, nextLi.getParent(), nextLi);
-                    sublist.remove();
-                }
-                // Migrate the sub list to current list item.
-                else {
-                    currentBlock.append(sublist);
-                }
-            }
-        }
-
-        var nextBlock, parent;
-        // Remove any remaining zombies path blocks at the end after line merged.
-        while (nextCursor.checkStartOfBlock() && nextCursor.checkEndOfBlock()) {
-            nextPath = nextCursor.startPath();
-            nextBlock = nextPath.block;
-
-            // Abort when nothing to be removed (https://dev.ckeditor.com/ticket/10890).
-            if (!nextBlock)
-                break;
-
-            // Check if also to remove empty list.
-            if (nextBlock.is('li')) {
-                parent = nextBlock.getParent();
-                if (nextBlock.equals(parent.getLast(nonEmpty)) && nextBlock.equals(parent.getFirst(nonEmpty)))
-                    nextBlock = parent;
-            }
-
-            nextCursor.moveToPosition(nextBlock, CKEDITOR.POSITION_BEFORE_START);
-            nextBlock.remove();
-        }
-
-        // Check if need to further merge with the list resides after the merged block. (https://dev.ckeditor.com/ticket/9080)
-        var walkerRng = nextCursor.clone(), editable = editor.editable();
-        walkerRng.setEndAt(editable, CKEDITOR.POSITION_BEFORE_END);
-        var walker = new CKEDITOR.dom.walker(walkerRng);
-        walker.evaluator = function (node) {
-            return nonEmpty(node) && !blockBogus(node);
-        };
-        var next = walker.next();
-        if (next && next.type == CKEDITOR.NODE_ELEMENT && next.getName() in CKEDITOR.dtd.$list)
-            mergeListSiblings(next);
-
-        cursor.moveToBookmark(bm);
-
-        // Make fresh selection.
-        cursor.select();
-
-        editor.fire('saveSnapshot');
-    }
-
-    /**
-     * @param li
-     * @return {null}
-     */
-    function getSubList(li) {
-        var last = li.getLast(nonEmpty);
-        return last && last.type == CKEDITOR.NODE_ELEMENT && last.getName() in listNodeNames ? last : null;
-    }
+    var listElementNames = {dt: 1, dd: 1},
+        allListElementNames = {li: 1, dt: 1, dd: 1};
 
     CKEDITOR.plugins.add('cdpNumberedList', {
-        icons: 'cdpnumberedlist,cdpnumberedlist-rtl',
-        hidpi: true,
-        requires: 'indentlist',
+        lang: 'en',
+        icons: 'cdpnumberedlist', // %REMOVE_LINE_CORE%
+        hidpi: true, // %REMOVE_LINE_CORE%
         init: function (editor) {
             if (editor.blockless) {
                 return;
             }
 
-            // Register command.
-            editor.addCommand('cdpNumberedList', new CdpListCommand());
+            var lang = editor.lang.descriptionlist,
+                plugin = CKEDITOR.plugins.cdpNumberedList;
 
-            // Register toolbar button.
-            if (editor.ui.addButton) {
-                editor.ui.addButton('cdpNumberedList', {
-                    label: 'Insert/Remove Numbered List',
-                    command: 'cdpNumberedList',
-                    directional: true,
-                    toolbar: 'list,11'
-                });
-            }
+            editor.addCommand('cdpNumberedList', {
+                allowedContent: 'dl dt dd',
+                contextSensitive: true,
 
-            // Handle backspace/del key to join list items.
-            editor.on('key', function (evt) {
-                // Use getKey directly in order to ignore modifiers.
-                var key = evt.data.domEvent.getKey(),
-                    li;
-
-                // DEL/BACKSPACE
-                if (editor.mode == 'wysiwyg' && key in {8: 1, 46: 1}) {
+                exec: function (editor) {
                     var sel = editor.getSelection(),
-                        range = sel.getRanges()[0],
-                        path = range && range.startPath();
+                        range = sel.getRanges()[0];
 
-                    if (!range || !range.collapsed) {
-                        return;
-                    }
-
-                    var isBackspace = key == 8,
-                        editable = editor.editable(),
-                        walker = new CKEDITOR.dom.walker(range.clone());
-
-                    walker.evaluator = function (node) {
-                        return nonEmpty(node) && !blockBogus(node);
-                    };
-                    walker.guard = function (node, isOut) {
-                        return !(isOut && node.type == CKEDITOR.NODE_ELEMENT && node.is('table'));
-                    };
-
-                    var cursor = range.clone();
-
-                    if (isBackspace) {
-                        var previous, joinWith;
-
-                        if (
-                            (previous = path.contains(listNodeNames)) &&
-                            range.checkBoundaryOfElement(previous, CKEDITOR.START) &&
-                            (previous = previous.getParent()) && previous.is('li') &&
-                            (previous = getSubList(previous))
-                        ) {
-                            joinWith = previous;
-                            previous = previous.getPrevious(nonEmpty);
-                            // Place cursor before the nested list.
-                            cursor.moveToPosition(
-                                previous && blockBogus(previous) ? previous : joinWith,
-                                CKEDITOR.POSITION_BEFORE_START);
-                        } else {
-                            walker.range.setStartAt(editable, CKEDITOR.POSITION_AFTER_START);
-                            walker.range.setEnd(range.startContainer, range.startOffset);
-
-                            previous = walker.previous();
-
-                            if (
-                                previous && previous.type == CKEDITOR.NODE_ELEMENT &&
-                                (previous.getName() in listNodeNames || previous.is('li'))
-                            ) {
-                                if (!previous.is('li')) {
-                                    walker.range.selectNodeContents(previous);
-                                    walker.reset();
-                                    walker.evaluator = isTextBlock;
-                                    previous = walker.previous();
-                                }
-
-                                joinWith = previous;
-                                // Place cursor at the end of previous block.
-                                cursor.moveToElementEditEnd(joinWith);
-
-                                // And then just before end of closest block element
-                                cursor.moveToPosition(cursor.endPath().block, CKEDITOR.POSITION_BEFORE_END);
-                            }
-                        }
-
-                        if (joinWith) {
-                            joinNextLineToCursor(editor, cursor, range);
-                            evt.cancel();
-                        } else {
-                            var list = path.contains(listNodeNames);
-
-                            // Backspace pressed at the start of list outdents the first list item.
-                            if (list && range.checkBoundaryOfElement(list, CKEDITOR.START)) {
-                                li = list.getFirst(nonEmpty);
-
-                                if (range.checkBoundaryOfElement(li, CKEDITOR.START)) {
-                                    previous = list.getPrevious(nonEmpty);
-
-                                    // Only if the list item contains a sub list, do nothing but
-                                    // simply move cursor backward one character.
-                                    if (getSubList(li)) {
-                                        if (previous) {
-                                            range.moveToElementEditEnd(previous);
-                                            range.select();
-                                        }
-
-                                        evt.cancel();
-                                    } else {
-                                        editor.execCommand('outdent');
-                                        evt.cancel();
-                                    }
-                                }
-                            }
-                        }
+                    if (this.state == CKEDITOR.TRISTATE_OFF) {
+                        plugin.createListFromRange(editor, range);
                     } else {
-                        var next, nextLine;
-
-                        li = path.contains('li');
-
-                        if (li) {
-                            walker.range.setEndAt(editable, CKEDITOR.POSITION_BEFORE_END);
-
-                            var last = li.getLast(nonEmpty);
-                            var block = last && isTextBlock(last) ? last : li;
-
-                            // Indicate cursor at the visual end of an list item.
-                            var isAtEnd = 0;
-
-                            next = walker.next();
-
-                            // When list item contains a sub list.
-                            if (
-                                next && next.type == CKEDITOR.NODE_ELEMENT &&
-                                next.getName() in listNodeNames &&
-                                next.equals(last)
-                            ) {
-                                isAtEnd = 1;
-
-                                // Move to the first item in sub list.
-                                next = walker.next();
-                            }
-                            // Right at the end of list item.
-                            else if (range.checkBoundaryOfElement(block, CKEDITOR.END)) {
-                                isAtEnd = 2;
-                            }
-
-                            if (isAtEnd && next) {
-                                // Put cursor range there.
-                                nextLine = range.clone();
-                                nextLine.moveToElementEditStart(next);
-
-                                // https://dev.ckeditor.com/ticket/13409
-                                // For the following case and similar
-                                //
-                                // <ul>
-                                // 	<li>
-                                // 		<p><a href="#one"><em>x^</em></a></p>
-                                // 		<ul>
-                                // 			<li><span>y</span></li>
-                                // 		</ul>
-                                // 	</li>
-                                // </ul>
-                                if (isAtEnd == 1) {
-                                    // Move the cursor to <em> if attached to "x" text node.
-                                    cursor.optimize();
-
-                                    // Abort if the range is attached directly in <li>, like
-                                    //
-                                    // <ul>
-                                    // 	<li>
-                                    // 		x^
-                                    // 		<ul>
-                                    // 			<li><span>y</span></li>
-                                    // 		</ul>
-                                    // 	</li>
-                                    // </ul>
-                                    if (!cursor.startContainer.equals(li)) {
-                                        var node = cursor.startContainer,
-                                            farthestInlineAscendant;
-
-                                        // Find <a>, which is farthest from <em> but still inline element.
-                                        while (node.is(CKEDITOR.dtd.$inline)) {
-                                            farthestInlineAscendant = node;
-                                            node = node.getParent();
-                                        }
-
-                                        // Move the range so it does not contain inline elements.
-                                        // It prevents <span> from being included in <em>.
-                                        //
-                                        // <ul>
-                                        // 	<li>
-                                        // 		<p><a href="#one"><em>x</em></a>^</p>
-                                        // 		<ul>
-                                        // 			<li><span>y</span></li>
-                                        // 		</ul>
-                                        // 	</li>
-                                        // </ul>
-                                        //
-                                        // so instead of
-                                        //
-                                        // <ul>
-                                        // 	<li>
-                                        // 		<p><a href="#one"><em>x^<span>y</span></em></a></p>
-                                        // 	</li>
-                                        // </ul>
-                                        //
-                                        // pressing DELETE produces
-                                        //
-                                        // <ul>
-                                        // 	<li>
-                                        // 		<p><a href="#one"><em>x</em></a>^<span>y</span></p>
-                                        // 	</li>
-                                        // </ul>
-                                        if (farthestInlineAscendant) {
-                                            cursor.moveToPosition(farthestInlineAscendant, CKEDITOR.POSITION_AFTER_END);
-                                        }
-                                    }
-                                }
-
-                                // Moving `cursor` and `next line` only when at the end literally (https://dev.ckeditor.com/ticket/12729).
-                                if (isAtEnd == 2) {
-                                    cursor.moveToPosition(cursor.endPath().block, CKEDITOR.POSITION_BEFORE_END);
-
-                                    // Next line might be text node not wrapped in block element.
-                                    if (nextLine.endPath().block) {
-                                        nextLine.moveToPosition(nextLine.endPath().block, CKEDITOR.POSITION_AFTER_START);
-                                    }
-                                }
-
-                                joinNextLineToCursor(editor, cursor, nextLine);
-                                evt.cancel();
-                            }
-                        } else {
-                            // Handle Del key pressed before the list.
-                            walker.range.setEndAt(editable, CKEDITOR.POSITION_BEFORE_END);
-                            next = walker.next();
-
-                            if (next && next.type == CKEDITOR.NODE_ELEMENT && next.is(listNodeNames)) {
-                                // The start <li>
-                                next = next.getFirst(nonEmpty);
-
-                                // Simply remove the current empty block, move cursor to the
-                                // subsequent list.
-                                if (path.block && range.checkStartOfBlock() && range.checkEndOfBlock()) {
-                                    path.block.remove();
-                                    range.moveToElementEditStart(next);
-                                    range.select();
-                                    evt.cancel();
-                                }
-                                // Preventing the default (merge behavior), but simply move
-                                // the cursor one character forward if subsequent list item
-                                // contains sub list.
-                                else if (getSubList(next)) {
-                                    range.moveToElementEditStart(next);
-                                    range.select();
-                                    evt.cancel();
-                                }
-                                // Merge the first list item with the current line.
-                                else {
-                                    nextLine = range.clone();
-                                    nextLine.moveToElementEditStart(next);
-                                    joinNextLineToCursor(editor, cursor, nextLine);
-                                    evt.cancel();
-                                }
-                            }
-                        }
-
+                        plugin.removeListFromRange(editor, range);
                     }
 
-                    // The backspace/del could potentially put cursor at a bad position,
-                    // being it handled or not, check immediately the selection to have it fixed.
-                    setTimeout(function () {
-                        editor.selectionChange(1);
-                    });
+                    sel.selectRanges([range]);
+                },
+
+                refresh: function (editor, path) {
+                    var dl = path.contains('dl', 1);
+                    this.setState(dl ? CKEDITOR.TRISTATE_ON : CKEDITOR.TRISTATE_OFF);
                 }
             });
-        },
+
+            editor.addCommand('cdpNumberedListLabel', {
+                contextSensitive: true,
+
+                exec: function (editor) {
+                    var sel = editor.getSelection(),
+                        range = sel.getRanges()[0];
+
+                    plugin.toggleListElementsTo(editor, range, this.state == CKEDITOR.TRISTATE_OFF ? 'dt' : 'dd');
+
+                    sel.selectRanges([range]);
+                },
+
+                refresh: refreshDtDdCallback('dt')
+            });
+
+            editor.addCommand('cdpNumberedListItem', {
+                contextSensitive: true,
+
+                exec: function (editor) {
+                    var sel = editor.getSelection(),
+                        range = sel.getRanges()[0];
+
+                    plugin.toggleListElementsTo(editor, range, this.state == CKEDITOR.TRISTATE_OFF ? 'dd' : 'dt');
+
+                    sel.selectRanges([range]);
+                },
+
+                refresh: refreshDtDdCallback('dd')
+            });
+
+            editor.ui.addButton && editor.ui.addButton('DescriptionList', {
+                // label: lang.cdpNumberedList,
+                command: 'cdpNumberedList',
+                toolbar: 'list,10'
+            });
+
+            handleEnterKey(editor);
+        }
     });
+
+    CKEDITOR.plugins.cdpNumberedList = {
+        /**
+         * Note: range must not start in description list.
+         */
+        createListFromRange: function (editor, range) {
+            var bm = range.createBookmark(),
+                iterator = range.createIterator(),
+                blocks = [],
+                // Lists (dl,ol,ul) that we may empty when moving blocks
+                // to newly created dl. These lists should be removed.
+                listsToCheck = [],
+                startWithDt = true,
+                lastBlockParent, dl, block;
+
+            // Check first node before block in which selection starts.
+            // If it's a dl then we'll append new elements to the existing list.
+            if ((dl = findPrecedingListContainer(range))) {
+                startWithDt = listEndsWithDd(dl);
+            }
+
+            // Scan range and remember all blocks.
+            while ((block = iterator.getNextParagraph())) {
+                blocks.push(block);
+            }
+
+            // If list container has not been created yet, create it now from the
+            // first block.
+            if (!dl) {
+                dl = this.createListContainer(editor, blocks[0]);
+            }
+
+            // We need to remember last block's parent now, cause we'll lost it after
+            // moving blocks to created list.
+            if (blocks.length > 1) {
+                lastBlockParent = blocks[blocks.length - 1].getParent();
+            }
+
+            moveBlocksToListContainer(dl, blocks, startWithDt, listsToCheck);
+
+            // Remove list containers that we could empty when moving
+            // block (in this case list items) to definition list container.
+            cleanUpEmptiedLists(listsToCheck);
+
+            if (lastBlockParent && lastBlockParent.is('li') && isBlockEmpty(lastBlockParent)) {
+                lastBlockParent.remove();
+            }
+
+            // If newly create list is followed by another list, merge them.
+            mergeToFollowingListContainer(dl);
+
+            range.moveToBookmark(bm);
+        },
+
+        /**
+         * Note: range must start in description list.
+         */
+        removeListFromRange: function (editor, range) {
+            var bm = range.createBookmark(),
+                iterator = range.createIterator(),
+                block,
+                firstBlock,
+                blocks = [];
+
+            // Expand range so it contains all real blocks from list
+            // items that are at least partially selected.
+            // We need to do that because:
+            // * list item is handled as whole - even partially selected will be entirely removed,
+            // * at the end we remove list items, so blocks must be extracted from them beforehand.
+            expandRangeToEntireItems(range);
+
+            while ((block = iterator.getNextParagraph())) {
+                if (block.getAscendant(listElementNames, true)) {
+                    blocks.push(block);
+                }
+            }
+
+            var block = blocks.shift(),
+                currentList = block.getAscendant('dl'),
+                splitRange = editor.createRange(),
+                listsToCheck = [currentList],
+                itemsToRemove = [],
+                list, item;
+
+            splitRange.moveToPosition(block.getAscendant(listElementNames, true), CKEDITOR.POSITION_BEFORE_START);
+            currentList = splitRange.splitElement(currentList);
+            listsToCheck.push(currentList);
+            moveBlock();
+
+            while ((block = blocks.shift())) {
+                list = block.getAscendant('dl');
+                if (list.equals(currentList)) {
+                    moveBlock();
+                } else {
+                    listsToCheck.push(list);
+                    splitRange.moveToPosition(block.getAscendant(listElementNames, true), CKEDITOR.POSITION_BEFORE_START);
+                    currentList = splitRange.splitElement(list);
+                    listsToCheck.push(currentList);
+                    moveBlock();
+                }
+            }
+
+            while ((item = itemsToRemove.pop())) {
+                item.remove();
+            }
+
+            while ((list = listsToCheck.pop())) {
+                if (list.getParent && isBlockEmpty(list)) {
+                    list.remove();
+                }
+            }
+
+            range.moveToBookmark(bm);
+
+            function moveBlock() {
+                if (block.is(listElementNames)) {
+                    block.renameNode('p');
+                } else {
+                    itemsToRemove.push(block.getAscendant(listElementNames));
+                }
+                block.insertBefore(currentList);
+            }
+        },
+
+        createListContainer: function (editor, block) {
+            var dl = editor.document.createElement('dl'),
+                blockParent = block.getParent(),
+                list = getWrappingList(block),
+                secondList, splitRange;
+
+            if (list) {
+                splitRange = editor.createRange();
+                splitRange.moveToPosition(block, CKEDITOR.POSITION_BEFORE_START);
+                secondList = splitRange.splitElement(list);
+            }
+
+            dl.insertBefore(list ? secondList : block);
+
+            // We need to remove block now, so if it was the list item in
+            // <ul><li></li></ul> we'll have an empty list which we'll be able to remove.
+            block.remove();
+
+            if (list) {
+                // Split might result in leaving: <ul></ul><dl></dl>...
+                if (isBlockEmpty(list)) {
+                    list.remove();
+
+                    // It could also result in: <ul><li></li></ul><dl></dl>...
+                    // if the passed block was a block inside list item (e.g. <li><p></p></li>).
+                } else if (!block.is('li') && isBlockEmpty(blockParent)) {
+                    blockParent.remove();
+                }
+            }
+
+            // Do the same as above, but for the list after created <dl>.
+            // Note - this works only in case of a collapsed range.
+            if (secondList) {
+                if (isBlockEmpty(secondList)) {
+                    secondList.remove();
+                } else if (!block.is('li')) {
+                    // But this time we have to find the list item.
+                    var listItem = secondList.getFirst(isElement('li'));
+                    if (listItem && isBlockEmpty(listItem)) {
+                        listItem.remove();
+                    }
+                }
+            }
+
+            return dl;
+        },
+
+        toggleListElementsTo: function (editor, range, toggleTo) {
+            var bm = range.createBookmark(),
+                walkerRange = editor.createRange(),
+                walker,
+                isElementToToggle = isElement(toggleTo == 'dt' ? 'dd' : 'dt'),
+                elementsToToggle = [],
+                node;
+
+            walkerRange.setStartAt(range.startPath().contains(listElementNames), CKEDITOR.POSITION_BEFORE_START);
+            walkerRange.setEndAt(range.endPath().contains(listElementNames), CKEDITOR.POSITION_AFTER_START);
+            walker = new CKEDITOR.dom.walker(walkerRange);
+
+            while ((node = walker.next())) {
+                if (isElementToToggle(node)) {
+                    elementsToToggle.push(node);
+                }
+            }
+
+            while ((node = elementsToToggle.pop())) {
+                node.renameNode(toggleTo);
+            }
+
+            range.moveToBookmark(bm);
+        }
+    };
+
+    // Checks passed list containers (ul, ol, dl) and removes empty ones.
+    // @param {CKEDITOR.dom.element[]} listsToCheck
+    function cleanUpEmptiedLists(listsToCheck) {
+        var list;
+
+        while ((list = listsToCheck.shift())) {
+            // It could be already removed.
+            if (list.getParent() && isBlockEmpty(list)) {
+                list.remove();
+            }
+        }
+    }
+
+    // @returns {Boolean} Whether next list element should be a dt.
+    function createListElement(dl, block, createDt) {
+        // It may happen that we are processing a block which already is a dt or dd
+        // (e.g. we're extending a dl). Just move the block to new dl container.
+        if (block.is(listElementNames)) {
+            block.appendTo(dl);
+
+            return block.is('dd');
+        } else {
+            var newBlock = block.getDocument().createElement(createDt ? 'dt' : 'dd');
+            block.moveChildren(newBlock);
+            newBlock.appendTo(dl);
+            block.remove();
+
+            return !createDt;
+        }
+    }
+
+    // Expand range so it contains entire list items that may initially be contained
+    // only partially. For example:
+    // <dl>...<dt><h1>foo</h1><h2>[bar</h2></dt><dd>ba]z<h3>bom</h3></dd>...</dl>
+    // after expanding:
+    // <dl>...<dt>[<h1>foo</h1><h2>bar</h2></dt><dd>baz<h3>bom</h3>]</dt>...</dl>
+    function expandRangeToEntireItems(range) {
+        var item = range.startContainer.getAscendant(listElementNames, true);
+        if (item) {
+            range.setStartAt(item, CKEDITOR.POSITION_AFTER_START);
+        }
+        item = range.endContainer.getAscendant(listElementNames, true);
+        if (item) {
+            range.setEndAt(item, CKEDITOR.POSITION_BEFORE_END);
+        }
+    }
+
+    // Finds list container that precedes block in which range starts.
+    // @returns CKEDITOR.dom.element List container or null.
+    function findPrecedingListContainer(range) {
+        var previousNode = range.startPath().block.getPrevious(isNotIgnored);
+
+        return (previousNode && isDl(previousNode)) ? previousNode : null;
+    }
+
+    // Returns dl, ol or ul element being direct parent or
+    // parent's parent of passed block.
+    function getWrappingList(block) {
+        var blockParent = block.getParent();
+
+        if (block.is(allListElementNames)) {
+            return blockParent;
+            // <li> cannot be the editable, so we don't have to check whether
+            // we're not leaking from it.
+        } else if (blockParent && blockParent.is(allListElementNames)) {
+            return blockParent.getParent();
+        }
+    }
+
+    // Handle enter:
+    // * At the end of list item - toggle from dt to dl and vice versa.
+    // * In an empty list item - exit the list.
+    function handleEnterKey(editor) {
+        var cmd = editor.getCommand('enter');
+        if (!cmd) {
+            return;
+        }
+
+        cmd.on('exec', function (evt) {
+            if (!isSelectionInListItem(editor)) {
+                return;
+            }
+
+            var range = editor.getSelection().getRanges()[0];
+
+            // Collapsed selection in an empty list item - exit the list.
+            if (range.collapsed && range.checkEndOfBlock() && range.checkStartOfBlock()) {
+                editor.execCommand('cdpNumberedList');
+                evt.cancel();
+            }
+        });
+
+        editor.on('beforeCommandExec', function (evt) {
+            if (evt.data.name != 'enter' || !isSelectionInListItem(editor)) {
+                return;
+            }
+
+            var range = editor.getSelection().getRanges()[0];
+
+            // Collapsed selection at the end of list item - toggle newly created item.
+            if (range.collapsed && range.checkEndOfBlock() && !range.checkStartOfBlock()) {
+                evt.data.toggleDescriptionListBlock = true;
+            }
+        });
+
+        editor.on('afterCommandExec', function (evt) {
+            if (evt.data.name == 'enter' && evt.data.toggleDescriptionListBlock) {
+                editor.execCommand('descriptionTerm');
+            }
+        });
+    }
+
+    function isBlockEmpty(list) {
+        var isNotIgnored = CKEDITOR.dom.walker.ignored(true),
+            range = new CKEDITOR.dom.range(list.getDocument()),
+            walker;
+
+        range.selectNodeContents(list);
+
+        walker = new CKEDITOR.dom.walker(range);
+        walker.evaluator = function (node) {
+            if (node.type == CKEDITOR.NODE_ELEMENT) {
+                return node.is(CKEDITOR.dtd.$empty);
+            } else {
+                return isNotIgnored(node);
+            }
+        };
+
+        return !walker.next();
+    }
+
+    function isElement(elementName) {
+        return function (node) {
+            return node.type == CKEDITOR.NODE_ELEMENT && node.is(elementName);
+        };
+    }
+
+    function isDtOrDd(node) {
+        return node.type == CKEDITOR.NODE_ELEMENT && node.is(listElementNames);
+    }
+
+    var isNotIgnored = CKEDITOR.dom.walker.ignored(true),
+        isDl = isElement('dl');
+
+    // Checks whether selection is in list item (but not deeper - e.g. in <dt><p>^</p></dt>).
+    function isSelectionInListItem(editor) {
+        var path = editor.elementPath();
+        return path.block && path.block.is(listElementNames);
+    }
+
+    // Checks if list ends with a dd element.
+    // @returns {Boolean}
+    function listEndsWithDd(dl) {
+        var lastElement = dl.getLast(isDtOrDd);
+        return lastElement ? lastElement.is('dd') : false;
+    }
+
+    // Looks for list container that follows the passed one
+    // and if found moves children of the passed one to the following one.
+    function mergeToFollowingListContainer(dl) {
+        var nextNode = dl.getNext(isNotIgnored);
+
+        if (nextNode && isDl(nextNode)) {
+            dl.moveChildren(nextNode, true);
+            dl.remove();
+        }
+    }
+
+    // @param {CKEDITOR.dom.element} dl List container to which blocks will be appended.
+    // @param {CKEDITOR.dom.element[]} blocks Blocks that will be transformed to dt/dd and appended
+    // to list container.
+    // @param {Boolean} startWithDt Whether first block should be transformed to dt or dd.
+    // @param {CKEDITOR.dom.element[]} Array to which lists containers (ul, ol, dl) that might
+    // be emptied when moving blocks will be pushed.
+    function moveBlocksToListContainer(dl, blocks, startWithDt, listsToCheck) {
+        var i = 0,
+            createDt = startWithDt,
+            list, block;
+
+        for (; i < blocks.length; ++i) {
+            block = blocks[i];
+
+            list = getWrappingList(block);
+            if (list) {
+                listsToCheck.push(list);
+            }
+
+            createDt = createListElement(dl, block, createDt);
+        }
+    }
+
+    function refreshDtDdCallback(dlOrDt) {
+        var names = {dl: 1};
+        names[dlOrDt] = 1;
+
+        return function (editor, path) {
+            var listElement = path.contains(names, 1);
+
+            if (!listElement) {
+                this.setState(CKEDITOR.TRISTATE_DISABLED);
+            } else {
+                this.setState(listElement.is(dlOrDt) ? CKEDITOR.TRISTATE_ON : CKEDITOR.TRISTATE_OFF);
+            }
+        };
+    }
+
 })();

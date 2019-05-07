@@ -8,12 +8,15 @@
             </li>
         </ol>
     </textarea>
-    <textarea name="editor2" id="editor2" rows="10" cols="80">
+
+    <div class="mt-5 border-top pt-5">
+
         <ol class="cdp-numbered-list">
             <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
             <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
             <li>
-                <div class="label">#.</div><div class="list-item">
+                <div class="label"></div>
+                <div class="list-item">
                     <ol>
                         <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
                         <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
@@ -21,22 +24,15 @@
                     </ol>
                 </div>
             </li>
+            <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
+            <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
+            <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
+            <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
+            <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
+            <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
+            <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
+            <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
         </ol>
-    </textarea>
-
-
-    <div class="mt-5 border-top pt-5">
-
-        <dl class="cdp-numbered-list">
-            <dt>#.</dt>
-            <dd>Enter text...</dd>
-            <dt>#.</dt>
-            <dd>Enter text...</dd>
-            <dt>#.</dt>
-            <dd>Enter text...</dd>
-            <dt>#.</dt>
-            <dd>Enter text...</dd>
-        </dl>
 
     </div>
 
@@ -63,7 +59,6 @@
             });
 
             CKEDITOR.replace("editor1", config);
-            CKEDITOR.replace("editor2", config);
         }, 100);
     </script>
 {% endblock %}

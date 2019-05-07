@@ -3,6 +3,42 @@ body {
 }
 
 
-.cdp-numbered-list {
+ol.cdp-numbered-list {
+    display: table;
+    list-style-type: none;
+    padding: 0 0 0 2em;
+    width: 100%;
 
+    background: #f5f5f5;
+}
+
+ol.cdp-numbered-list li {
+    display: table-row;
+    table-layout: fixed;
+}
+
+ol.cdp-numbered-list li > div.label {
+    display: inline-block;
+    margin: 0 0.2em 0.4em 0;
+    padding: 0 0.6em 0 0;
+    white-space: nowrap;
+
+    background: #fff;
+    border: 1px dotted #ccc;
+}
+
+ol.cdp-numbered-list li > div.list-item {
+    display: table-cell;
+    margin-bottom: 0.6em;
+    padding: 0;
+    width: 100%;
+
+    background: #fff;
+    border: 1px dotted #ccc;
+}
+
+ol.cdp-numbered-list li > div.list-item > ol  {
+    padding: 0;
+
+    background: #f5f5f5;
 }

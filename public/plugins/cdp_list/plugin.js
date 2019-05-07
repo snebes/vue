@@ -9,12 +9,6 @@
                 return;
             }
 
-            editor.on('insertElement', function (evt) {
-                if (evt.data.getName() === 'li') {
-                    evt.data.append(new CKEDITOR.dom.comment(' this was automatically added '), true );
-                }
-            });
-
             editor.on('change', function (evt) {
                 var editor = evt.editor,
                     doc = editor.document;
@@ -31,10 +25,17 @@
                     }
                 }
 
-                var item, firstChild, lastChild, newLabel, newItem;
+                var item, hasLabel, isLabelEmpty, hasListItem, isListItemEmpty, hasSublist;
 
                 for (i = 0, iMax = listItems.length; i < iMax; ++i) {
                     item = listItems[i];
+                    hasLabel = false;
+                    hasListItem = false;
+                    hasSublist = false;
+                    isLabelEmpty = true;
+                    isListItemEmpty = true;
+
+
 
                     if (0 == item.$.children.length) {
                         newLabel = doc.createElement('div');
@@ -66,6 +67,4 @@
             });
         }
     });
-
-    CKEDITOR.plugins.cdpNumberedList = {};
 })();

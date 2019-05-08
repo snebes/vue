@@ -2,41 +2,71 @@
 
 {% block body %}
     <textarea name="editor1" id="editor1" rows="10" cols="80">
-        <ol>
-            <li>
-                <div class="label">test</div><div class="list-item">test</div>
-            </li>
-        </ol>
+
+    <ol class="cdp-numbered-list">
+        <li><div class="label">#.</div>Enter text here.</li>
+        <li><div class="label">#.</div>Enter text here.</li>
+        <li>
+            <div class="label"></div>
+            <ol>
+                <li><div class="label">#.</div>Enter text here.</li>
+                <li><div class="label">#.</div>Enter text here.</li>
+                <li><div class="label">#.</div>Enter text here.</li>
+            </ol>
+        </li>
+        <li><div class="label">#.</div>Enter text here.</li>
+        <li><div class="label">#.</div>Enter text here.</li>
+        <li><div class="label">#.</div>Enter text here.</li>
+        <li><div class="label">#.</div>Enter text here.</li>
+        <li><div class="label">#.</div>Enter text here.</li>
+        <li><div class="label">#.</div>Enter text here.</li>
+        <li><div class="label">#.</div>Enter text here.</li>
+        <li><div class="label">#.</div>Enter text here.</li>
+    </ol>
+
     </textarea>
+
+
+
+
 
     <div class="mt-5 border-top pt-5">
 
+        <ol>
+            <li data-label="#.">Content</li>
+            <li data-label="#.">Content</li>
+            <li data-label="#.">Content</li>
+            <li data-label="#.">Content</li>
+        </ol>
+
         <ol class="cdp-numbered-list">
-            <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
-            <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
+            <li><div class="label">#.</div>Enter text here.</li>
+            <li><div class="label">#.</div>Enter text here.</li>
             <li>
                 <div class="label"></div>
                 <div class="list-item">
                     <ol>
-                        <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
-                        <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
-                        <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
+                        <li><div class="label">#.</div>Enter text here.</li>
+                        <li><div class="label">#.</div>Enter text here.</li>
+                        <li><div class="label">#.</div>Enter text here.</li>
                     </ol>
                 </div>
             </li>
-            <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
-            <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
-            <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
-            <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
-            <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
-            <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
-            <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
-            <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
+            <li><div class="label">#.</div>Enter text here.</li>
+            <li><div class="label">#.</div>Enter text here.</li>
+            <li><div class="label">#.</div>Enter text here.</li>
+            <li><div class="label">#.</div>Enter text here.</li>
+            <li><div class="label">#.</div>Enter text here.</li>
+            <li><div class="label">#.</div>Enter text here.</li>
+            <li><div class="label">#.</div>Enter text here.</li>
+            <li><div class="label">#.</div>Enter text here.</li>
         </ol>
 
     </div>
+{% endblock %}
 
 
+{% block dumper %}
     <script src="/ckeditor/ckeditor.js"></script>
     <script>
         setTimeout(function() {

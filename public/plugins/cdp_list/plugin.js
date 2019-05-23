@@ -1,6 +1,77 @@
 'use strict';
 
 (function () {
+    var listCommand = {
+        exec: function (editor) {
+            var state = editor.getCommand('cdpNumberedList').state,
+                selection = editor.getSelection(),
+                range = selection && selection.getRanges()[0];
+
+            if (!range) {
+                return;
+            }
+
+            var bookmarks = selection.createBookmarks();
+
+            // @todo: move cursor to block element.
+
+            var iterator = range.createIterator(),
+                block;
+            iterator.enlargeBr = editor.config.enterMode != CKEDITOR.ENTER_BR;
+
+            if (state == CKEDITOR.TRISTATE_OFF) {
+                var paragraphs = [];
+
+                while ((block = iterator.getNextParagraph())) {
+                    paragraphs.push(block);
+                }
+
+                // If no paragraphs, create one from the current selection position.
+                if (paragraphs.length < 1) {
+                    var para = editor.document.createElement('div'),
+                        firstBookmark = bookmarks.shift();
+
+                    range.insertNode(para);
+                    para.append(new CKEDITOR.dom.text('\ufeff', editor.document));
+                    range.moveToBookmark(firstBookmark);
+                    range.selectNodeContents(para);
+                    range.collapse(true);
+
+                    firstBookmark = range.createBookmark();
+                    paragraphs.push(para);
+                    bookmarks.unshift(firstBookmark);
+                }
+
+                // Make sure all paragraphs have the same parent.
+                var commonParent = paragraphs[0].getParent(),
+                    tmp = [];
+
+                for (var i = 0; i < paragraphs.length; ++i) {
+                    block = paragraphs[i];
+                    commonParent = commonParent.getCommonAncestor(block.getParent());
+                }
+
+                var newOl = editor.document.createElement('ol'),
+                    newLi = editor.document.createElement('li'),
+                    newLabel = editor.document.createElement('div'),
+                    newContent = editor.document.createElement('div');
+
+                newOl.addClass('cdp-numbered-list').insertBefore(paragraphs[0]);
+                newLi.appendTo(newOl);
+
+                newLabel.addClass('label');
+                newLabel.setText('#.');
+                newLabel.appendTo(newLi);
+                newContent.addClass('list-item');
+                newContent.setText('Enter text...');
+                newContent.appendTo(newLi);
+            }
+
+            selection.selectBookmarks( bookmarks );
+            editor.focus();
+        },
+    };
+
     CKEDITOR.plugins.add('cdpNumberedList', {
         requires: 'widget',
         icons: 'cdpnumberedlist',
@@ -11,110 +82,45 @@
             }
 
             editor.on('change', function (evt) {
-                var editor = evt.editor,
-                    doc = editor.document;
-
-                var lists = doc.find('ol'),
-                    listItems, ol, li, label,
-                    i, iMax, j, jMax;
-
-                for (i = 0, iMax = lists.count(); i < iMax; ++i) {
-                    ol = lists.getItem(i);
-                    ol.addClass('cdp-numbered-list');
-
-                    listItems = ol.find('>li');
-
-                    for (j = 0, jMax = listItems.count(); j < jMax; ++j) {
-                        li = listItems.getItem(j);
-
-                        if (!li.is({li: 1})) {
-                            continue;
-                        }
-
-                        // Check that label is the first element.
-                        label = li.getFirst();
-
-                        if ('div' === label.getName() && label.hasClass('label')) {
-                            continue;
-                        }
-
-                        label = li.findOne('>div.label');
-
-                        if (!label) {
-                            label = doc.createElement('div');
-                            label.addClass('label');
-                            label.setText('#.');
-                        }
-
-                        label.insertBefore(li.getFirst());
-                    }
-                }
-/*
-                console.log(listItems);
-
-                for (i = 0, iMax = listItems.length; i < iMax; ++i) {
-                    var li = listItems[i],
-                        liLabel = null,
-                        liListItem = null,
-                        subList = null,
-                        hasOther = false;
-
-                    for (j = 0, jMax = li.getChildCount(); j < jMax; ++j) {
-                        var child = li.getChild(j);
-
-                        if (!(child instanceof CKEDITOR.dom.element)) {
-                            console.log(child);
-                            continue;
-                        }
-
-                        if (child.is(CKEDITOR.dtd.$empty)) {
-                            hasOther = false;
-                        } else if (child.is('div') && child.hasClass('label')) {
-                            liLabel = child;
-                        } else if (child.is('div') && child.hasClass('list-item')) {
-                            liListItem = child;
-                        } else if (child.is('ol')) {
-                            subList = true;
-                        } else {
-                            hasOther = true;
-                        }
-                    }
-
-                    if (!liLabel) {
-                        liLabel = doc.createElement('div');
-                        liLabel.addClass('label');
-                        liLabel.setText('#.');
-
-                        if (liListItem instanceof CKEDITOR.dom.element) {
-                            liLabel.insertBefore(liListItem);
-                        } else {
-                            liLabel.appendTo(li);
-                        }
-                    }
-
-                    if (!liListItem) {
-                        liListItem = doc.createElement('div');
-                        liListItem.addClass('list-item');
-
-                        if (hasOther) {
-                            li.moveChildren(liListItem);
-                        } else {
-                            liListItem.setText('Enter text...');
-                        }
-
-                        if (liLabel) {
-                            liListItem.insertAfter(liLabel);
-                        } else {
-                            liListItem.appendTo(li);
-                        }
-                    }
-                }*/
+                console.log(evt.editor.getData());
             });
-        },
-        onLoad: function () {
-            CKEDITOR.addCss(
 
-            );
+            // editor.addCommand('cdpNumberedList', listCommand);
+            // editor.ui.addButton && editor.ui.addButton('CdpNumberedList', {
+            //     label: 'Insert Numbered List (c)',
+            //     command: 'cdpNumberedList',
+            //     toolbar: 'list,10'
+            // });
+
+
+
+
+
+            editor.widgets.add('cdpNumberedList', {
+                template: '<li><div class="label"></div><div class="list-item"></div></li>',
+                editables: {
+                    label: {
+                        selector: 'div.label'
+                    },
+                    content: {
+                        selector: 'div.list-item'
+                    }
+                },
+                upcast: function (el) {
+                    console.log(el);
+                    if (el.name != 'li' || el.parent.name != 'ol') {
+                        return false;
+                    }
+
+                    return el;
+                }
+            });
+
+            // editor.addCommand('cdpNumberedList', {
+            //     context: 'ol',
+            //     allowedContent: 'ol[class]; li; div; del ins sub sup',
+            //     requiredContent: 'ol; li',
+            // });
         }
     });
 })();

@@ -5,4 +5,5 @@ twig:
 
     form_themes:
         - 'bootstrap_4_layout.html.twig'
-        - 'vue_layout.html.twig'
+        - 'form/vue_layout.html.twig'
+        - '@FOSCKEditor/Form/ckeditor_widget.html.twig'

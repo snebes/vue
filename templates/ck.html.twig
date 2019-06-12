@@ -1,38 +1,7 @@
 {% extends 'base.html.twig' %}
 
 {% block body %}
-    <textarea name="editor1" id="editor1" rows="10" cols="80">This is my textarea to be replaced with CKEditor.</textarea>
-    <textarea name="editor2" id="editor2" rows="10" cols="80">
-        <ol class="cdp-numbered-list">
-            <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
-            <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
-            <li>
-                <div class="label">#.</div><div class="list-item">
-                    <ol>
-                        <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
-                        <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
-                        <li><div class="label">#.</div><div class="list-item">Enter text here.</div></li>
-                    </ol>
-                </div>
-            </li>
-        </ol>
-    </textarea>
-
-
-
-    <script src="/ckeditor/ckeditor.js"></script>
-    <script>
-        setTimeout(function() {
-            let config = {
-                contentsCss: "/ck.css",
-                extraPlugins: "cdpNumberedList",
-                removePlugins: 'list'
-            };
-            CKEDITOR.plugins.addExternal("cdpNumberedList", "/plugins/cdp_list/", "plugin.js");
-            CKEDITOR.plugins.addExternal("descriptionlist", "/plugins/dl/", "plugin.js");
-
-            CKEDITOR.replace("editor1", config);
-            CKEDITOR.replace("editor2", config);
-        }, 100);
-    </script>
+    <div class="form-group">
+        <ck-editor v-model="content"></ck-editor>
+    </div>
 {% endblock %}

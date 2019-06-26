@@ -1,50 +1,111 @@
 <template>
-    <div class="ckeditor"><textarea :id="id" :value="value"></textarea></div>
+    <div>
+        <textarea
+            :id="id"
+            :name="name"
+            :value="value"></textarea>
+    </div>
 </template>
 
 <script>
+    let inc = new Date().getTime();
+
     export default {
         props: {
-            value: { type: String },
-            id: { type: String, default: 'editor' },
-            height: { type: String, default: '90px' },
-            toolbar: { type: Array, default: () => [['Undo','Redo']] },
-            language: { type: String, default: 'en' },
-            extraplugins: { type: String, default: '' }
+            name: { type: String },
+            id: { type: String, default: 'editor-${++inc}' },
+            config: { type: Object, default: () => {} },
+            readOnlyMode: { type: Boolean, default: () => false }
         },
-        beforeUpdate() {
-            const ckeditorId = this.id;
-
-            if (this.value !== CKEDITOR.instances[ckeditorId].getData()) {
-                CKEDITOR.instances[ckeditorId].setData(this.value);
+        data: () => {
+            return {
+                instanceValue: '',
+                value: ''
+            };
+        },
+        computed: {
+            instance() {
+                return CKEDITOR.instances[this.id];
+            }
+        },
+        watch: {
+            value(val) {
+                try {
+                    if (this.instance) {
+                        this.update(val);
+                    }
+                } catch (e) {}
+            },
+            readOnlyMode(val) {
+                this.instance.setReadOnly(val);
             }
         },
         mounted() {
-            const ckeditorId = this.id;
-            const ckeditorConfig = {
-                toolbar: this.toolbar,
-                language: this.language,
-                height: this.height,
-                extraPlugins: this.extraplugins,
-                removePlugins: 'elementspath',
-                resize_enabled: false
-            };
+            this.value = this.$slots.default[0].text;
+            this.create();
 
-            CKEDITOR.replace(ckeditorId, ckeditorConfig);
-            CKEDITOR.instances[ckeditorId].setData(this.value);
-            CKEDITOR.instances[ckeditorId].on('change', () => {
-                let ckeditorData = CKEDITOR.instances[ckeditorId].getData();
-
-                if (ckeditorData !== this.value) {
-                    this.$emit('input', ckeditorData);
-                }
-            });
+            console.log(this.config);
         },
-        destroyed() {
-            const ckeditorId = this.id;
+        methods: {
+            create() {
+                if (typeof CKEDITOR === 'undefined') {
+                    console.log('CKEDITOR is missing');
+                } else {
+                    CKEDITOR.replace(this.id, this.config);
 
-            if (CKEDITOR.instances[ckeditorId]) {
-                CKEDITOR.instances[ckeditorId].destroy();
+                    this.instance.setData(this.value);
+                    this.instance.on('instanceReady', () => {
+                        this.instance.setData(this.value);
+                    });
+
+                    this.instance.on('change', this.onChange);
+                    this.instance.on('mode', this.onMode);
+                    this.instance.on('blur', evt => {
+                        this.$emit('blur', evt);
+                    });
+                    this.instance.on('focus', evt => {
+                        this.$emit('focus', evt);
+                    });
+                    this.instance.on('contentDom', evt => {
+                        this.$emit('contentDom', evt);
+                    });
+                    this.instance.on('dialogDefinition', evt => {
+                        this.$emit('dialogDefinition', evt);
+                    });
+
+                    this.$once('hook:beforeDestroy', () => {
+                        this.destroy();
+                    });
+                }
+            },
+            update(val) {
+                if (this.instanceValue !== val) {
+                    this.instance.setData(val, { internal: false });
+                    this.instanceValue = val;
+                }
+            },
+            destroy() {
+                try {
+                    let editor = window['CKEDITOR'];
+                    if (editor.instances && editor.instances[this.id]) {
+                        editor.instances[this.id].destroy();
+                    }
+                } catch (e) {}
+            },
+            onMode() {
+                if (this.instance.mode === 'source') {
+                    let editable = this.instance.editable();
+                    editable.attachListener(editable, 'input', () => {
+                        this.onChange();
+                    });
+                }
+            },
+            onChange() {
+                let html = this.instance.getData();
+                if (html !== this.value) {
+                    this.$emit('input', html);
+                    this.instanceValue = html;
+                }
             }
         }
     };

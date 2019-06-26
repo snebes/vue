@@ -1,7 +1,10 @@
 {% extends 'base.html.twig' %}
 
 {% block body %}
-    <div class="form-group">
-        <ck-editor v-model="content"></ck-editor>
-    </div>
+    {{ form(form) }}
+
+{#    <div class="form-group">#}
+{#        <ck-editor v-model="content"></ck-editor>#}
+{#    </div>#}
 {% endblock %}
+

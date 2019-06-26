@@ -23,8 +23,5 @@ new Vue({
         CkEditor,
         ColorPicker,
     },
-    delimiters: ['${', '}'],
-    data: {
-        content: '<p><strong>Lorem ipsum dolor sit amet</strong>, consectetur adipisicing elit. Asperiores facere rem nostrum molestiae. Minus, amet recusandae nam vel explicabo nisi error quaerat magnam excepturi veniam.</p>'
-    }
+    delimiters: ['${', '}']
 });

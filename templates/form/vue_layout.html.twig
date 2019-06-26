@@ -7,3 +7,12 @@
 {% block vue_proponent_choice_widget %}
     <select></select>
 {% endblock %}
+
+{% block vue_ck_editor_widget %}
+    <ck-editor
+        id="{{ id }}"
+        name="{{ full_name }}"
+        v-bind:config="{{ config|json_encode }}">
+        {{ value }}
+    </ck-editor>
+{% endblock %}

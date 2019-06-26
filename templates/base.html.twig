@@ -7,6 +7,7 @@
 
     <title>{% block title %}Welcome!{% endblock %}</title>
 
+
     {{ encore_entry_link_tags('app') }}
 </head>
 <body class="bg-light">
@@ -19,9 +20,18 @@
         {% endblock %}
     </div>
 
-
     <script src="/ckeditor/ckeditor.js"></script>
 
     {{ encore_entry_script_tags('app') }}
+
+    <script type="text/javascript">
+        (function() {
+            if (CKEDITOR.instances["form_ck1"]) { CKEDITOR.instances["form_ck1"].destroy(true); delete CKEDITOR.instances["form_ck1"]; }
+
+            CKEDITOR.disableAutoInline = true;
+            var fos_ckeditor_form_ck1 = CKEDITOR.replace("form_ck1", {"language":"en"});
+            fos_ckeditor_form_ck1.on('change', function() { fos_ckeditor_form_ck1.updateElement(); });
+        })();
+    </script>
 </body>
 </html>

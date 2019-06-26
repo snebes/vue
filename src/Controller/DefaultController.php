@@ -16,10 +16,20 @@ class DefaultController extends AbstractController
     /**
      * @Route("/")
      *
+     * @return Response
+     */
+    public function index(): Response
+    {
+        return $this->render('base.html.twig');
+    }
+
+    /**
+     * @Route("/color")
+     *
      * @param Request $request
      * @return Response
      */
-    public function index(Request $request): Response
+    public function color(Request $request): Response
     {
         $data = ['color' => '#ff0000'];
         $form = $this->createFormBuilder($data)

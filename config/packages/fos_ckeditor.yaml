@@ -1,0 +1,94 @@
+# Read the documentation: https://symfony.com/doc/current/bundles/FOSCKEditorBundle/index.html
+fos_ck_editor:
+    autoload: false
+    auto_inline: false
+    base_path: 'ckeditor/'
+    js_path: 'ckeditor/ckeditor.js'
+    input_sync: true
+    jquery: true
+
+    configs:
+        defaultEditor: &defaultEditor
+            allowedContent:
+                '*': { attributes: '' }
+
+                a: { attributes: 'href' }
+                address: {}
+                b: {}
+                br: {}
+                del: {}
+                div:
+                    attributes: 'class'
+                    classes: 'exception, list, equation_group, equation, equation_content, equation_number, where'
+                'h1 h2 h3 h4 h5 h6': {}
+                i: {}
+                img:
+                    attributes: 'alt, src, height, width, src-filename'
+                ins: {}
+                p: {}
+                pre: {}
+                sub: {}
+                sup: {}
+
+                # lists
+                'ol ul': {}
+                li: {}
+
+                # tables
+                table: { attributes: 'frame, rules' }
+                'thead tbody tfoot': { attributes: 'align valign' }
+                tr: {}
+                'th td': { attributes: 'colspan, rowspan, align, valign, class', classes: 'left, center, right, justify' }
+            autoGrow_onStartup: true
+            bodyClass: ''
+            clipboard_defaultContentType: 'text'
+            contentsCss: '/build/ckeditor.css'
+            copyFormatting_allowRules: 'b; s; u; strong; p; div; table; thead; tbody; tr; td; th; ol; ul; li;'
+            coreStyles_bold:      { element: 'b', overrides: 'strong' }
+            coreStyles_italic:    { element: 'i', overrides: 'em' }
+            coreStyles_strike:    { element: 'del', overrides: 's' }
+            coreStyles_underline: { element: 'ins', overrides: 'u' }
+            customConfig: ''
+            dataIndentationChars: '    '
+            disableNativeSpellChecker: false
+            disallowedContent: ''
+            docType: '<!DOCTYPE html>'
+            entities: false
+            title: 'Text Editor'
+            toolbar: 'defaultToolbar'
+            toolbarLocation: 'top'
+            removeButtons: ''
+            removeDialogTabs: 'link:advanced'
+            specialChars: [
+                '!', '#', '$', '%', "'", '(', ')', '*', '+', ',', '-', '.', '/',
+                '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', ';', '?', '@', '[', ']', '^', '_', '`',
+                'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+                'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+                '{', '|', '}', '~', '&bull;', '&fnof;', '&sum;', '&ordm;', '&le;', '=', '&ge;',
+                '&Alpha;', '&Beta;', '&Gamma;', '&Delta;', '&Epsilon;', '&Zeta;', '&Eta;', '&Theta;', '&Iota;',
+                '&Kappa;', '&Lambda;', '&Mu;', '&Nu;', '&Xi;', '&Omicron;', '&Pi;', '&Rho;', '&Sigma;', '&Tau;',
+                '&Upsilon;', '&Phi;', '&Chi;', '&Psi;', '&Omega;',
+                '&alpha;', '&beta;', '&gamma;', '&delta;', '&epsilon;', '&zeta;', '&eta;', '&theta;', '&iota;',
+                '&kappa;', '&lambda;', '&mu;', '&nu;', '&xi;', '&omicron;', '&pi;', '&rho;', '&sigmaf;', '&sigma;',
+                '&tau;', '&upsilon;', '&phi;', '&chi;', '&psi;', '&omega;',
+                '&Aacute;', '&aacute;', '&Agrave;', '&Acirc;', '&agrave;', '&Acirc;', '&acirc;', '&Auml;', '&auml;',
+                '&Atilde;', '&atilde;', '&Aring;', '&aring;', '&AElig;', '&aelig;', '&Ccedil;', '&ccedil;', '&ETH;',
+                '&eth;', '&Eacute;', '&eacute;', '&Egrave;', '&egrave;', '&Ecirc;', '&ecirc;', '&Euml;', '&euml;',
+                '&Iacute;', '&iacute;', '&Igrave;', '&igrave;', '&Icirc;', '&icirc;', '&Iuml;', '&iuml;', '&Ntilde;',
+                '&ntilde;', '&Oacute;', '&oacute;', '&Ograve;', '&ograve;', '&Ocirc;', ' &ocirc;', '&Ouml;', '&ouml;',
+                '&Otilde;', '&otilde;', '&Oslash;', '&oslash;', '&szlig;', '&THORN;', '&thorn;', '&Uacute;', '&uacute;',
+                '&Ugrave;', '&ugrave;', '&Ucirc;', '&ucirc;', '&Uuml;', '&uuml;', '&Yacute;', '&yacute;', '&yuml;',
+                '&copy;', '&reg;', '&trade;', '&amp;', '&lt;', '&gt;', '&euro;', '&cent;', '&pound;', '&quot;',
+                '&lsquo;', '&rsquo;', '&ldquo;', '&rdquo;', '&laquo;', '&raquo;', '&mdash;', '&ndash;', '&deg;',
+                '&plusmn;', '&frac14;', '&frac12;', '&frac34;', '&times;', '&divide;', '&infin;'
+                ]
+
+    toolbars:
+        configs:
+            defaultToolbar:
+                - { name: 'clipboard', items: [ 'Format' , 'Styles' , '-', 'Cut', 'Copy', 'Paste', '-', 'Undo', 'Redo' ] }
+                - { name: 'basicstyles', items: [ 'Bold', 'Italic', 'Subscript', 'Superscript', '-', 'Underline', 'Strike', '-', 'RemoveFormat' ] }
+                - { name: 'paragraph', items: [ 'NumberedList', 'BulletedList', '-', 'Outdent', 'Indent' ] }
+                - { name: 'links', items: [ 'Link', 'Unlink' ] }
+                - { name: 'insert', items: [ 'Table', 'SpecialChar', 'base64image' ] }
+                - { name: 'document', items: [ 'Source' ] }

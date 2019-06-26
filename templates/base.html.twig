@@ -1,23 +1,37 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>{% block title %}Welcome!{% endblock %}</title>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        {{ encore_entry_link_tags('app') }}
+    <title>{% block title %}Welcome!{% endblock %}</title>
 
-        {#<link href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.7.4/css/bulma.css" rel="stylesheet"/>#}
-        <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
-    </head>
-    <body>
-        <div id="app" class="container mt-5">
-            {% block body %}{% endblock %}
-        </div>
 
-        <div class="container" style="margin-top: 400px">
-            {% block dumper %}{% endblock %}
-        </div>
+    {{ encore_entry_link_tags('app') }}
+</head>
+<body class="bg-light">
 
-        {{ encore_entry_script_tags('app') }}
-    </body>
+
+
+    <div id="app" class="container">
+        {% block body %}
+            <b-alert show>Default Alert</b-alert>
+        {% endblock %}
+    </div>
+
+    <script src="/ckeditor/ckeditor.js"></script>
+
+    {{ encore_entry_script_tags('app') }}
+
+    <script type="text/javascript">
+        (function() {
+            if (CKEDITOR.instances["form_ck1"]) { CKEDITOR.instances["form_ck1"].destroy(true); delete CKEDITOR.instances["form_ck1"]; }
+
+            CKEDITOR.disableAutoInline = true;
+            var fos_ckeditor_form_ck1 = CKEDITOR.replace("form_ck1", {"language":"en"});
+            fos_ckeditor_form_ck1.on('change', function() { fos_ckeditor_form_ck1.updateElement(); });
+        })();
+    </script>
+</body>
 </html>

@@ -6,7 +6,7 @@
         "bootstrap-vue": "^2.0.0-rc.20",
         "core-js": "^3.0.0",
         "jquery": "^3.5.0",
-        "node-sass": "^4.11.0",
+        "node-sass": "^4.13.1",
         "popper.js": "^1.15.0",
         "sass-loader": "^7.0.1",
         "vue": "^2.6.10",
